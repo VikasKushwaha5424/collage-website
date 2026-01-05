@@ -1,0 +1,17 @@
+:root {
+    /* Colors */
+    --primary: #4361ee;       /* Vibrant Blue */
+    --primary-dark: #3a0ca3;  /* Deep Purple/Blue */
+    --secondary: #4cc9f0;     /* Light Blue */
+    --text-main: #2b2d42;     /* Dark Grey for text */
+    --text-light: #8d99ae;    /* Light Grey for subtitles */
+    --bg-body: #f8f9fa;       /* Off-white background */
+    --bg-card: #ffffff;       /* Pure white for cards */
+    --danger: #ef233c;        /* Red for errors/logout */
+    --success: #2ec4b6;       /* Green for approvals */
+
+    /* Spacing & Borders */
+    --radius: 12px;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    --sidebar-width: 260px;
+}
