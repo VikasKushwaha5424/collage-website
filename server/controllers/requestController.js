@@ -1,69 +1,77 @@
-const db = require('../config/excelDb');
-const { FILES, WORKFLOW } = require('../utils/constants');
+const Request = require('../models/Request');
+const { v4: uuidv4 } = require('uuid'); // You might need to install this: npm install uuid
 
-exports.raiseRequest = (req, res) => {
-    const { rollNumber, certificateType } = req.body;
-    const reqs = db.read(FILES.REQUESTS);
-    const approvals = db.read(FILES.APPROVALS);
+// 1. Get all requests (for Admin/HOD) or specific student's requests
+exports.getRequests = async (req, res) => {
+    try {
+        const { role, username } = req.query; // Assuming you send these from frontend
 
-    const newId = `REQ${reqs.length + 1}`;
+        let query = {};
 
-    // 1. Add Request
-    reqs.push({ 
-        requestId: newId, 
-        rollNumber, 
-        certificateType, 
-        currentStage: 'OFFICE', 
-        finalStatus: 'IN_PROGRESS' 
-    });
-
-    // 2. Add Empty Approval Chain
-    approvals.push({ 
-        requestId: newId, 
-        OFFICE: 'PENDING', TEACHER: 'PENDING', MENTOR: 'PENDING', 
-        HOD: 'PENDING', PRINCIPAL: 'PENDING' 
-    });
-
-    db.write(FILES.REQUESTS, reqs);
-    db.write(FILES.APPROVALS, approvals);
-    
-    res.json({ message: 'Request Raised Successfully!', requestId: newId });
-};
-
-exports.getDashboardData = (req, res) => {
-    const { role, userId } = req.query;
-    const allReqs = db.read(FILES.REQUESTS);
-    
-    if (role === 'STUDENT') {
-        res.json(allReqs.filter(r => r.rollNumber === userId));
-    } else {
-        res.json(allReqs.filter(r => r.currentStage === role));
-    }
-};
-
-exports.approveRequest = (req, res) => {
-    const { requestId, role } = req.body;
-    const reqs = db.read(FILES.REQUESTS);
-    const approvals = db.read(FILES.APPROVALS);
-
-    // Update Approvals Sheet
-    const approvalRow = approvals.find(a => a.requestId === requestId);
-    if (approvalRow) approvalRow[role] = 'APPROVED';
-
-    // Update Request Stage
-    const reqRow = reqs.find(r => r.requestId === requestId);
-    if (reqRow) {
-        const nextRole = WORKFLOW[role];
-        if (nextRole === 'DONE') {
-            reqRow.finalStatus = 'COMPLETED';
-            reqRow.currentStage = 'DONE';
-        } else {
-            reqRow.currentStage = nextRole;
+        // If student, only show their own requests
+        if (role === 'student') {
+            query = { studentUsername: username };
+        } 
+        // If HOD, show things pending for HOD
+        else if (role === 'hod') {
+            query = { status: 'pending_hod' };
         }
-    }
+        // If Principal, show things pending for Principal
+        else if (role === 'principal') {
+            query = { status: 'pending_principal' };
+        }
 
-    db.write(FILES.REQUESTS, reqs);
-    db.write(FILES.APPROVALS, approvals);
-    
-    res.json({ message: 'Approved Successfully!' });
+        const requests = await Request.find(query).sort({ createdAt: -1 });
+        res.json({ success: true, data: requests });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 2. Create a new Request
+exports.createRequest = async (req, res) => {
+    try {
+        const { studentUsername, certificateType, reason } = req.body;
+
+        const newRequest = new Request({
+            requestId: uuidv4().slice(0, 6).toUpperCase(), // Generate short ID
+            studentUsername,
+            certificateType,
+            reason
+        });
+
+        await newRequest.save();
+        res.json({ success: true, message: 'Request submitted successfully!', request: newRequest });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 3. Approve or Reject a Request
+exports.updateStatus = async (req, res) => {
+    try {
+        const { requestId, role, action, comment } = req.body; // action = 'approve' or 'reject'
+
+        const request = await Request.findOne({ requestId });
+        if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+
+        // Add to approval history
+        request.approvals.push({ role, status: action, comment });
+
+        // Logic to move to next stage
+        if (action === 'reject') {
+            request.status = 'rejected';
+        } else if (action === 'approve') {
+            if (role === 'hod') {
+                request.status = 'pending_principal'; // Move to next level
+            } else if (role === 'principal') {
+                request.status = 'approved'; // Final approval
+            }
+        }
+
+        await request.save();
+        res.json({ success: true, message: 'Request updated' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 };

@@ -1,3 +1,6 @@
+const connectDB = require('./config/db');
+connectDB(); // Call the connection function
+
 const express = require('express');
 const cors = require('cors');
 
