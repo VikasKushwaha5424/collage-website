@@ -1,23 +1,18 @@
 const Request = require('../models/Request');
-const { v4: uuidv4 } = require('uuid'); // You might need to install this: npm install uuid
+const { v4: uuidv4 } = require('uuid');
 
-// 1. Get all requests (for Admin/HOD) or specific student's requests
+// 1. Get Requests
 exports.getRequests = async (req, res) => {
     try {
-        const { role, username } = req.query; // Assuming you send these from frontend
-
+        const { role, username } = req.query;
         let query = {};
 
-        // If student, only show their own requests
+        // Filter based on who is logged in
         if (role === 'student') {
             query = { studentUsername: username };
-        } 
-        // If HOD, show things pending for HOD
-        else if (role === 'hod') {
+        } else if (role === 'hod') {
             query = { status: 'pending_hod' };
-        }
-        // If Principal, show things pending for Principal
-        else if (role === 'principal') {
+        } else if (role === 'principal') {
             query = { status: 'pending_principal' };
         }
 
@@ -28,7 +23,7 @@ exports.getRequests = async (req, res) => {
     }
 };
 
-// 2. Create a new Request
+// 2. Create Request
 exports.createRequest = async (req, res) => {
     try {
         const { studentUsername, certificateType, reason } = req.body;
@@ -47,25 +42,25 @@ exports.createRequest = async (req, res) => {
     }
 };
 
-// 3. Approve or Reject a Request
+// 3. Update Status (Approve/Reject)
 exports.updateStatus = async (req, res) => {
     try {
-        const { requestId, role, action, comment } = req.body; // action = 'approve' or 'reject'
+        const { requestId, role, action, comment } = req.body;
 
         const request = await Request.findOne({ requestId });
         if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
 
-        // Add to approval history
+        // Add approval record
         request.approvals.push({ role, status: action, comment });
 
-        // Logic to move to next stage
+        // Move to next stage
         if (action === 'reject') {
             request.status = 'rejected';
         } else if (action === 'approve') {
             if (role === 'hod') {
-                request.status = 'pending_principal'; // Move to next level
+                request.status = 'pending_principal';
             } else if (role === 'principal') {
-                request.status = 'approved'; // Final approval
+                request.status = 'approved';
             }
         }
 

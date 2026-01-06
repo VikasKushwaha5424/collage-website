@@ -2,77 +2,66 @@ import React, { useState } from 'react';
 import './Login.css';
 
 const Login = ({ onLogin }) => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setIsLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
 
-        try {
-            const res = await fetch('http://localhost:5000/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            
-            const data = await res.json();
-            
-            if (res.ok) {
-                onLogin(data);
-            } else {
-                setError(data.message || 'Invalid credentials');
-            }
-        } catch (err) {
-            setError('Server unavailable. Please try again later.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    try {
+      // Connect to your new MongoDB Backend
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-    return (
-        <div className="login-container">
-            <div className="login-card">
-                <h2>Welcome Back</h2>
-                <p className="login-subtext">Enter your credentials to access the portal</p>
-                
-                {error && <div className="error-msg">{error}</div>}
-                
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label className="login-label">Username</label>
-                        <input 
-                            className="login-input" 
-                            type="text" 
-                            placeholder="e.g. 123 or teacher" 
-                            value={username} 
-                            onChange={(e) => setUsername(e.target.value)}
-                            required 
-                        />
-                    </div>
-                    
-                    <div className="form-group">
-                        <label className="login-label">Password</label>
-                        <input 
-                            className="login-input" 
-                            type="password" 
-                            placeholder="Enter your password" 
-                            value={password} 
-                            onChange={(e) => setPassword(e.target.value)}
-                            required 
-                        />
-                    </div>
+      const data = await response.json();
 
-                    <button type="submit" className="login-btn" disabled={isLoading}>
-                        {isLoading ? 'Signing in...' : 'Sign In'}
-                    </button>
-                </form>
-            </div>
+      if (data.success) {
+        // Pass the user info up to App.js
+        onLogin({ username, role: data.role });
+      } else {
+        setError(data.message || 'Invalid credentials');
+      }
+    } catch (err) {
+      setError('Server error. Is the backend running?');
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <form className="login-form" onSubmit={handleSubmit}>
+        <h2>College Portal Login</h2>
+        {error && <div className="error-message">{error}</div>}
+        
+        <div className="form-group">
+          <label>Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
         </div>
-    );
+
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
+        <button type="submit">Login</button>
+      </form>
+    </div>
+  );
 };
 
 export default Login;

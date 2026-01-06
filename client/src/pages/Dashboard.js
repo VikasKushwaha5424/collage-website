@@ -1,145 +1,165 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { PlusCircle, CheckCircle } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = ({ user, onLogout }) => {
-    const [requests, setRequests] = useState([]);
-    const [certificateType, setCertificateType] = useState('Bonafide');
-    const isStudent = user.role === 'STUDENT';
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Form state for students
+  const [newRequest, setNewRequest] = useState({ certificateType: '', reason: '' });
+  const [message, setMessage] = useState('');
 
-    // 1. Fetch Data when Dashboard loads
-    const fetchData = async () => {
-        try {
-            // Pass role and userId to get the correct data
-            const res = await fetch(`http://localhost:5000/data?role=${user.role}&userId=${user.username}`);
-            const data = await res.json();
-            setRequests(data);
-        } catch (err) {
-            console.error("Failed to fetch data", err);
-        }
-    };
+  // 1. Fetch Data from MongoDB when page loads
+  useEffect(() => {
+    fetchRequests();
+  }, [user]);
 
-    useEffect(() => {
-        fetchData();
-    }, [user]);
+  const fetchRequests = async () => {
+    try {
+      // Send user role and username to get specific data
+      const response = await fetch(`http://localhost:5000/api/requests?role=${user.role}&username=${user.username}`);
+      const data = await response.json();
+      if (data.success) {
+        setRequests(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // 2. Handle "Apply for Certificate" (Student Only)
-    const handleApply = async () => {
-        await fetch('http://localhost:5000/request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                rollNumber: user.username, 
-                certificateType: certificateType 
-            })
-        });
-        alert('Application Submitted!');
-        fetchData(); // Refresh table
-    };
+  // 2. Handle creating a new request (Student only)
+  const handleCreateRequest = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:5000/api/requests/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentUsername: user.username,
+          certificateType: newRequest.certificateType,
+          reason: newRequest.reason
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setMessage('Request submitted!');
+        setNewRequest({ certificateType: '', reason: '' }); // Clear form
+        fetchRequests(); // Refresh list
+      }
+    } catch (error) {
+      console.error("Error creating request:", error);
+    }
+  };
 
-    // 3. Handle "Approve Request" (Staff Only)
-    const handleApprove = async (requestId) => {
-        await fetch('http://localhost:5000/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                requestId, 
-                role: user.role 
-            })
-        });
-        alert('Request Approved!');
-        fetchData(); // Refresh table so the item disappears
-    };
+  // 3. Handle Approval/Rejection (HOD/Principal only)
+  const handleStatusUpdate = async (requestId, action) => {
+    const comment = prompt(`Enter comment for ${action}:`); // Simple prompt for comment
+    if (!comment) return;
 
-    return (
-        <div className="dashboard-layout">
-            <Sidebar user={user} onLogout={onLogout} />
-            
-            <main className="main-content">
-                <header className="top-header">
-                    <h1>Hello, {user.username} 👋</h1>
-                    <p>Role: <strong>{user.role}</strong></p>
-                </header>
+    try {
+      const response = await fetch('http://localhost:5000/api/requests/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId,
+          role: user.role,
+          action, // 'approve' or 'reject'
+          comment
+        })
+      });
 
-                {/* --- STUDENT VIEW: Apply Section --- */}
-                {isStudent && (
-                    <div className="action-card">
-                        <h3>Apply for a Certificate</h3>
-                        <div className="apply-form">
-                            <select 
-                                value={certificateType} 
-                                onChange={(e) => setCertificateType(e.target.value)}
-                                className="apply-select"
-                            >
-                                <option value="Bonafide">Bonafide Certificate</option>
-                                <option value="Transcript">Transcript</option>
-                                <option value="Character">Character Certificate</option>
-                            </select>
-                            <button className="apply-btn" onClick={handleApply}>
-                                <PlusCircle size={18} /> Apply Now
-                            </button>
-                        </div>
-                    </div>
-                )}
+      const data = await response.json();
+      if (data.success) {
+        alert(`Request ${action}d successfully`);
+        fetchRequests(); // Refresh list to remove it or update status
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
+  };
 
-                {/* --- TABLE SECTION --- */}
-                <div className="content-section">
-                    <h3>{isStudent ? 'My Applications' : 'Pending Approvals'}</h3>
+  return (
+    <div className="dashboard-container">
+      <Sidebar user={user} onLogout={onLogout} />
+      
+      <div className="main-content">
+        <header>
+          <h1>Welcome, {user.username} ({user.role})</h1>
+        </header>
+
+        {/* STUDENT VIEW: Create Request Form */}
+        {user.role === 'student' && (
+          <div className="card create-request-card">
+            <h3>Apply for Certificate</h3>
+            {message && <p className="success-msg">{message}</p>}
+            <form onSubmit={handleCreateRequest}>
+              <select 
+                value={newRequest.certificateType}
+                onChange={(e) => setNewRequest({...newRequest, certificateType: e.target.value})}
+                required
+              >
+                <option value="">Select Certificate Type</option>
+                <option value="Bonafide">Bonafide Certificate</option>
+                <option value="Transfer">Transfer Certificate</option>
+              </select>
+              <textarea 
+                placeholder="Reason for application..."
+                value={newRequest.reason}
+                onChange={(e) => setNewRequest({...newRequest, reason: e.target.value})}
+                required
+              />
+              <button type="submit">Submit Request</button>
+            </form>
+          </div>
+        )}
+
+        {/* ALL ROLES: View Requests List */}
+        <div className="card request-list-card">
+          <h3>{user.role === 'student' ? 'My Applications' : 'Pending Approvals'}</h3>
+          
+          {loading ? <p>Loading...</p> : (
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Student</th>
+                  <th>Status</th>
+                  {(user.role === 'hod' || user.role === 'principal') && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map(req => (
+                  <tr key={req._id}>
+                    <td>{req.requestId}</td>
+                    <td>{req.certificateType}</td>
+                    <td>{req.studentUsername}</td>
+                    <td>
+                      <span className={`status-badge ${req.status}`}>
+                        {req.status.replace('_', ' ')}
+                      </span>
+                    </td>
                     
-                    {requests.length === 0 ? (
-                        <p className="empty-state">No records found.</p>
-                    ) : (
-                        <div className="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Student ID</th>
-                                        <th>Type</th>
-                                        <th>Current Stage</th>
-                                        <th>Status</th>
-                                        {!isStudent && <th>Action</th>}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {requests.map(req => (
-                                        <tr key={req.requestId}>
-                                            <td>{req.requestId}</td>
-                                            <td>{req.rollNumber}</td>
-                                            <td>{req.certificateType}</td>
-                                            <td>
-                                                <span className="stage-badge">
-                                                    {req.currentStage}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className={`status-pill ${req.finalStatus === 'COMPLETED' ? 'approved' : 'pending'}`}>
-                                                    {req.finalStatus}
-                                                </span>
-                                            </td>
-                                            
-                                            {/* Staff Approve Button */}
-                                            {!isStudent && (
-                                                <td>
-                                                    <button 
-                                                        className="approve-btn"
-                                                        onClick={() => handleApprove(req.requestId)}
-                                                    >
-                                                        <CheckCircle size={16} /> Approve
-                                                    </button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                    {/* Action Buttons for HOD/Principal */}
+                    {(user.role === 'hod' || user.role === 'principal') && (
+                      <td>
+                        <button className="btn-approve" onClick={() => handleStatusUpdate(req.requestId, 'approve')}>Approve</button>
+                        <button className="btn-reject" onClick={() => handleStatusUpdate(req.requestId, 'reject')}>Reject</button>
+                      </td>
                     )}
-                </div>
-            </main>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

@@ -19,12 +19,12 @@ const requestSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        default: 'pending_hod', // Start at the first step
+        default: 'pending_hod', 
         enum: ['pending_hod', 'pending_principal', 'approved', 'rejected'] 
     },
-    // We can store approval history directly inside the request now!
+    // We store approvals inside the Request itself (No need for a separate Approval model)
     approvals: [{
-        role: String, // e.g., 'hod', 'principal'
+        role: String, // 'hod' or 'principal'
         status: String, // 'approved' or 'rejected'
         date: { type: Date, default: Date.now },
         comment: String

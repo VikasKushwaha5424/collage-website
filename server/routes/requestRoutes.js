@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const requestController = require('../controllers/requestController');
 
-router.post('/request', requestController.raiseRequest);
-router.get('/data', requestController.getDashboardData);
-router.post('/approve', requestController.approveRequest);
+router.get('/', requestController.getRequests);
+router.post('/create', requestController.createRequest);
+router.post('/update-status', requestController.updateStatus);
 
 module.exports = router;
